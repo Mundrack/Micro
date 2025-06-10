@@ -1,0 +1,51 @@
+version: '3.8'
+
+services:
+  library-app:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: library-microservice
+    ports:
+      - "8000:8000"
+    environment:
+      - MONGO_URI=${MONGO_URI}
+      - MONGO_DB_NAME=${MONGO_DB_NAME:-library_db}
+      - APP_HOST=0.0.0.0
+      - APP_PORT=8000
+      - DEBUG=${DEBUG:-False}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - SECRET_KEY=${SECRET_KEY:-development-key}
+    volumes:
+      - ../logs:/var/log/library
+    env_file:
+      - ../.env
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Opcional: MongoDB local (comentado porque usamos Atlas)
+  # mongodb:
+  #   image: mongo:7.0
+  #   container_name: library-mongodb
+  #   ports:
+  #     - "27017:27017"
+  #   environment:
+  #     - MONGO_INITDB_ROOT_USERNAME=admin
+  #     - MONGO_INITDB_ROOT_PASSWORD=password
+  #     - MONGO_INITDB_DATABASE=library_db
+  #   volumes:
+  #     - mongodb_data:/data/db
+  #   restart: unless-stopped
+
+# Volúmenes (descomentadar si usas MongoDB local)
+# volumes:
+#   mongodb_data:
+
+networks:
+  default:
+    name: library-network
