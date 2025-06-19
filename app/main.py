@@ -1,78 +1,109 @@
+"""
+Library Microservice - Main Application Entry Point
+
+This module sets up the FastAPI application, configures middleware,
+registers routes, and handles application lifecycle events.
+
+Author: Mateo Gabriel Puga Montesdeoca.
+Version: 1.0.0
+"""
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
-from contextlib import asynccontextmanager
+import logging
 
-from app.config.database import init_database
-from app.config.settings import settings
-from app.controllers.book_controller import router as book_router
-from app.controllers.author_controller import router as author_router
-from app.controllers.category_controller import router as category_router
-from app.exceptions.exception_handler import setup_exception_handlers
+# Import controllers for route registration
+from app.controllers import book_controller, author_controller, category_controller
+from app.config.database import init_db
 
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
+logger = logging.getLogger(__name__)
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # Startup
-    await init_database()
-    yield
-    # Shutdown
-    pass
-
-
-# Crear instancia de FastAPI
+# Create FastAPI application instance
 app = FastAPI(
-    title="Library Microservice",
-    description="Microservicio independiente para gestión de librería",
+    title="Library Management Microservice",
+    description="A comprehensive RESTful API for library management operations",
     version="1.0.0",
-    docs_url="/docs",
-    redoc_url="/redoc",
-    lifespan=lifespan
+    docs_url="/docs",          # Swagger UI endpoint
+    redoc_url="/redoc",        # ReDoc endpoint
+    openapi_url="/openapi.json"  # OpenAPI schema endpoint
 )
 
-# Configurar CORS
+# Configure CORS middleware to allow cross-origin requests
+# This is essential for frontend applications running on different ports
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # En producción, especificar dominios exactos
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=["*"],        # In production, specify exact origins
+    allow_credentials=True,      # Allow cookies and authentication headers
+    allow_methods=["*"],        # Allow all HTTP methods
+    allow_headers=["*"],        # Allow all headers
 )
 
-# Configurar manejadores de excepciones
-setup_exception_handlers(app)
+# Register API route handlers with appropriate prefixes and tags
+app.include_router(
+    book_controller.router, 
+    prefix="/api", 
+    tags=["Books"]
+)
+app.include_router(
+    author_controller.router, 
+    prefix="/api", 
+    tags=["Authors"]
+)
+app.include_router(
+    category_controller.router, 
+    prefix="/api", 
+    tags=["Categories"]
+)
 
-# Registrar rutas
-app.include_router(book_router, prefix="/api", tags=["books"])
-app.include_router(author_router, prefix="/api", tags=["authors"])
-app.include_router(category_router, prefix="/api", tags=["categories"])
+@app.on_event("startup")
+async def startup_event():
+    """
+    Application startup event handler.
+    
+    This function is executed when the application starts up.
+    It initializes the database connection and performs any
+    necessary startup operations.
+    """
+    logger.info("Starting Library Microservice...")
+    await init_db()
+    logger.info("Database initialized successfully")
 
+@app.on_event("shutdown")
+async def shutdown_event():
+    """
+    Application shutdown event handler.
+    
+    This function is executed when the application shuts down.
+    It performs cleanup operations like closing database connections.
+    """
+    logger.info("Shutting down Library Microservice...")
 
-# Health check endpoint
-@app.get("/health")
+@app.get("/", tags=["Health"])
 async def health_check():
+    """
+    Health check endpoint.
+    
+    Returns:
+        dict: Application status and version information
+    """
     return {
         "status": "healthy",
-        "service": "library-microservice",
+        "service": "Library Management Microservice",
         "version": "1.0.0"
     }
 
-
-# Root endpoint
-@app.get("/")
-async def root():
-    return {
-        "message": "Library Microservice API",
-        "docs": "/docs",
-        "health": "/health"
-    }
-
-
+# Application entry point
 if __name__ == "__main__":
     uvicorn.run(
         "app.main:app",
-        host=settings.app_host,
-        port=settings.app_port,
-        reload=settings.debug,
-        log_level=settings.log_level.lower()
+        host="0.0.0.0",      # Listen on all available interfaces
+        port=8000,           # Default port
+        reload=True,         # Auto-reload on code changes (development only)
+        log_level="info"     # Logging level
     )
